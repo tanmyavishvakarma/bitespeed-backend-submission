@@ -11,14 +11,3 @@ export const contacts = sqliteTable("Contacts", {
     updatedAt: text("updatedAt").default(sql`CURRENT_TIMESTAMP`),
     deletedAt: text("deletedAt")
 });
-
-// export type ContactRequest = { email?: string; phoneNumber?: string };
-
-// export type ContactResponse = {
-//   contact: {
-//     primaryContactId: number;
-//     emails: string[];
-//     phoneNumbers: string[];
-//     secondaryContactIds: number[];
-//   };
-// };
