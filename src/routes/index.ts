@@ -20,15 +20,16 @@ interface ContactResponse {
 }
 
 router.get("/", (req, res) => {
-    res.send("TANMYA VISHVAKARMA BITESPEED BACKED DEV SUBMISSION")
-})
+    res.send("TANMYA VISHVAKARMA BITESPEED BACKED DEV SUBMISSION");
+});
 
 router.post('/identify', async (req: Request<{}, {}, IdentifyRequest>, res: Response) => {
     const { email, phoneNumber } = req.body;
 
     const existingContacts = await db.select().from(contacts)
-        .where(or(eq(contacts.email, email), eq(contacts.phoneNumber, phoneNumber))).limit(1);
+        .where(or(eq(contacts.email, email), eq(contacts.phoneNumber, phoneNumber)));
 
+    console.log({existingContacts})
     if (existingContacts.length === 0) {
         const newContact = await db.insert(contacts)
             .values({
@@ -36,8 +37,8 @@ router.post('/identify', async (req: Request<{}, {}, IdentifyRequest>, res: Resp
                 phoneNumber,
                 linkPrecedence: 'primary',
             })
-            .returning()
-        console.log({ newContact })
+            .returning();
+
         res.json({
             contact: {
                 primaryContactId: newContact[0].id,
@@ -49,12 +50,16 @@ router.post('/identify', async (req: Request<{}, {}, IdentifyRequest>, res: Resp
     } else {
         const primaryContact = existingContacts.find(c => c.linkPrecedence === 'primary');
         const secondaryContactIds = existingContacts.filter(c => c.linkPrecedence === 'secondary').map(c => c.id);
+        const emails = new Set(existingContacts.map(c => c.email).filter(Boolean) as string[]);
 
-        const emails = existingContacts.map(c => c.email).filter(Boolean) as string[];
-        const phoneNumbers = existingContacts.map(c => c.phoneNumber).filter(Boolean) as string[];
+        console.log({emails})
+
+        const phoneNumbers = new Set(existingContacts.map(c => c.phoneNumber).filter(Boolean) as string[]);
+
+        console.log({phoneNumbers})
 
         const shouldCreateSecondaryContact =
-            (email && !emails.includes(email)) || (phoneNumber && !phoneNumbers.includes(phoneNumber));
+            (email && !emails.has(email)) || (phoneNumber && !phoneNumbers.has(phoneNumber));
 
         if (shouldCreateSecondaryContact) {
             const newSecondaryContact = await db.insert(contacts)
@@ -64,25 +69,25 @@ router.post('/identify', async (req: Request<{}, {}, IdentifyRequest>, res: Resp
                     linkedId: primaryContact!.id,
                     linkPrecedence: 'secondary',
                 })
-                .returning()
-            console.log(newSecondaryContact)
+                .returning();
+
             secondaryContactIds.push(newSecondaryContact[0].id);
-            emails.push(newSecondaryContact[0].email);
-            phoneNumbers.push(newSecondaryContact[0].phoneNumber);
+            emails.add(newSecondaryContact[0].email);
+            phoneNumbers.add(newSecondaryContact[0].phoneNumber);
         } else {
-            await db.update(contacts)
-                .set({
-                    email: emails.includes(email) ? email : contacts.email,
-                    phoneNumber: phoneNumbers.includes(phoneNumber) ? phoneNumber : contacts.phoneNumber,
-                    updatedAt: new Date().toString(),
-                })
-                .where(eq(contacts.id, primaryContact!.id))
+            //   await db.update(contacts)
+            //     .set({
+            //       email: emails.has(email) ? email : contacts.email,
+            //       phoneNumber: phoneNumbers.has(phoneNumber) ? phoneNumber : contacts.phoneNumber,
+            //       updatedAt: new Date().toString(),
+            //     })
+            //     .where(eq(contacts.id, primaryContact!.id));
         }
 
         const response: ContactResponse = {
             primaryContactId: primaryContact!.id,
-            emails,
-            phoneNumbers,
+            emails: Array.from(emails),
+            phoneNumbers: Array.from(phoneNumbers),
             secondaryContactIds,
         };
 
