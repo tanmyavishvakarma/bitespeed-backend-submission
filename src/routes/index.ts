@@ -1,5 +1,5 @@
 import express, { Request, Response } from "express";
-import { db } from "../../db";
+import { db } from "../../db/index.js";
 import { contacts } from "../../db/schema.js";
 import { eq, or, asc } from "drizzle-orm";
 
