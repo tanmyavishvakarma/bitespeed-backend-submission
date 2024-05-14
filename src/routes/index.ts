@@ -24,9 +24,10 @@ const formatDate = (date) => {
     return formattedDate;
 }
 
-router.get("/", (req, res) => {
+router.get("/", (_, res) => {
     res.send("TANMYA VISHVAKARMA BITESPEED BACKED DEV SUBMISSION");
 });
+
 
 router.post('/identify', async (req: Request<{}, {}, IdentifyRequest>, res: Response) => {
     try {
