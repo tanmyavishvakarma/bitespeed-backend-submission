@@ -32,14 +32,16 @@ router.get("/", (_, res) => {
 router.post('/identify', async (req: Request<{}, {}, IdentifyRequest>, res: Response) => {
     try {
         let { email, phoneNumber } = req.body;
-        phoneNumber = phoneNumber || null;
-        email = email || null;
+        phoneNumber = phoneNumber || "";
+        email = email || "";
+        let restContacts = null 
+        let firstContact = await db.select().from(contacts).where(or(eq(contacts.email, email), eq(contacts.phoneNumber, phoneNumber))).orderBy(asc(contacts.createdAt));
 
-        let existingContacts = await db.select().from(contacts)
-            .where(or(eq(contacts.email, email), eq(contacts.phoneNumber, phoneNumber)))
-            .orderBy(asc(contacts.createdAt));
+        if (firstContact.length > 0) {
+            restContacts = await db.select().from(contacts).where(eq(contacts.linkedId, firstContact[0].id)).orderBy(asc(contacts.createdAt));
+        }
 
-        if (existingContacts.length === 0) {
+        if (firstContact.length === 0 && restContacts === null) {
             const newContact = await db.insert(contacts)
                 .values({
                     email,
@@ -57,8 +59,11 @@ router.post('/identify', async (req: Request<{}, {}, IdentifyRequest>, res: Resp
                 },
             });
         } else {
-            let primaryContacts = existingContacts.filter(c => c.linkPrecedence === 'primary');
-            let primaryContact = primaryContacts[0];
+            let allContacts = firstContact.concat(restContacts || []);
+            let allEmails = new Set(allContacts.map(c => c.email).filter(Boolean) as string[]);
+            let allPhoneNumbers = new Set(allContacts.map(c => c.phoneNumber).filter(Boolean) as string[]);
+
+            let primaryContacts = allContacts.filter(c => c.linkPrecedence === 'primary');
 
             if (primaryContacts.length > 1) {
 
@@ -69,52 +74,52 @@ router.post('/identify', async (req: Request<{}, {}, IdentifyRequest>, res: Resp
                     await db.update(contacts)
                         .set({
                             linkPrecedence: "secondary",
-                            linkedId: primaryContact?.id,
+                            linkedId: primaryContacts[0]?.id,
                             updatedAt: formatDate(new Date())
                         })
                         .where(eq(contacts.id, id))
                         .execute();
                 }
 
-                existingContacts = await db.select().from(contacts)
+                allContacts = await db.select().from(contacts)
                     .where(or(eq(contacts.email, email), eq(contacts.phoneNumber, phoneNumber)))
                     .orderBy(asc(contacts.createdAt));
             }
 
-            let secondaryContactIds = existingContacts
-                .filter(c => c.linkPrecedence === 'secondary')
-                .map(c => c.id);
-            let emails = new Set(existingContacts.map(c => c.email).filter(Boolean) as string[]);
-            let phoneNumbers = new Set(existingContacts.map(c => c.phoneNumber).filter(Boolean) as string[]);
-
-
-            const shouldCreateSecondaryContact =
-                (email && !emails.has(email)) || (phoneNumber && !phoneNumbers.has(phoneNumber));
+            let secondaryContactIds = new Set(allContacts
+            .filter(c => c.linkPrecedence === 'secondary')
+            .map(c => c.id));
         
-            if (shouldCreateSecondaryContact) {
+            const createSecondary = (email && !allEmails.has(email)) || (phoneNumber && !allPhoneNumbers.has(phoneNumber));
+
+            let primaryContactId = firstContact[0].linkPrecedence === "secondary" ? firstContact[0]?.linkedId : firstContact[0]?.id
+
+            if (createSecondary) {
                 const newSecondaryContact = await db.insert(contacts)
                     .values({
                         email,
                         phoneNumber,
-                        linkedId: primaryContact?.id,
+                        linkedId:primaryContactId,
                         linkPrecedence: 'secondary',
                     })
                     .returning();
 
-                secondaryContactIds.push(newSecondaryContact[0].id);
-                emails.add(newSecondaryContact[0].email);
-                phoneNumbers.add(newSecondaryContact[0].phoneNumber);
+                secondaryContactIds.add(newSecondaryContact[0].id);
+                allEmails.add(newSecondaryContact[0].email);
+                allPhoneNumbers.add(newSecondaryContact[0].phoneNumber);
             }
-
+            
             const response: ContactResponse = {
-                primaryContactId: primaryContact?.id,
-                emails: Array.from(emails),
-                phoneNumbers: Array.from(phoneNumbers),
-                secondaryContactIds,
+                primaryContactId: primaryContactId,
+                emails: Array.from(allEmails),
+                phoneNumbers: Array.from(allPhoneNumbers),
+                secondaryContactIds: Array.from(secondaryContactIds),
             };
 
             res.json({ contact: response });
         }
+
+
     } catch (error) {
         console.error("Error:", error);
         res.status(500).json({ error: "Internal Server Error" });
