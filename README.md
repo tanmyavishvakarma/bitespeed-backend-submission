@@ -2,6 +2,11 @@ https://bitespeed-backend-submission.onrender.com/identify
 
 I have used a local SQL database and already have two entries for your convenience.
 
+## Deployed Version
+A deployed version of this application is available for immediate testing. You can use the following link to access the live version and start testing the routes directly:
+[Deployed Application Link](https://bitespeed-backend-submission.onrender.com)
+The first request will take longer than usual since it is on free hosting, but the rest will work quickly.
+
 ### Installation
 
 1. Clone the repository to your local machine:
